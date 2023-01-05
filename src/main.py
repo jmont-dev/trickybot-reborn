@@ -66,6 +66,14 @@ async def chat_command(int: discord.Interaction, message: str):
         if not isinstance(int.channel, discord.TextChannel):
             return
 
+        if not (int.channel.name=="dome-arigato"):
+            print(f"Messages must be sent in the dome-arigato channel. Current channel is {int.channel.name}")
+            await int.response.send_message(
+                f"You must post in the dome-arigato channel to get a response from trickybot.",
+                ephemeral=True,
+            )            
+            return
+
         # block servers not in allow list
         if should_block(guild=int.guild):
             return
@@ -155,24 +163,26 @@ async def on_message(message: DiscordMessage):
 
         # ignore messages not in a thread
         channel = message.channel
-        if not isinstance(channel, discord.Thread):
+        if not isinstance(channel, discord.Thread) and channel.name!="dome-arigato":
             return
 
         # ignore threads not created by the bot
         thread = channel
-        if thread.owner_id != client.user.id:
+        if isinstance(channel, discord.Thread) and thread.owner_id != client.user.id:
             return
 
         # ignore threads that are archived locked or title is not what we want
-        if (
-            thread.archived
-            or thread.locked
-            or not thread.name.startswith(ACTIVATE_THREAD_PREFX)
-        ):
-            # ignore this thread
-            return
+        
+        if isinstance(channel, discord.Thread):
+            if (
+                thread.archived
+                or thread.locked
+                or not thread.name.startswith(ACTIVATE_THREAD_PREFX)
+            ):
+                # ignore this thread
+                return
 
-        if thread.message_count > MAX_THREAD_MESSAGES:
+        if isinstance(channel, discord.Thread) and thread.message_count > MAX_THREAD_MESSAGES:
             # too many messages, no longer going to reply
             await close_thread(thread=thread)
             return
@@ -239,7 +249,7 @@ async def on_message(message: DiscordMessage):
             discord_message_to_message(message)
             async for message in thread.history(limit=MAX_THREAD_MESSAGES)
         ]
-        channel_messages = [x for x in channel_messages if x is not None]
+        channel_messages = [x for x in channel_messages if x is not None and x is not isinstance(channel, discord.Thread)]
         channel_messages.reverse()
 
         # generate the response
