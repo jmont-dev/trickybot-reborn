@@ -204,7 +204,8 @@ async def record(ctx):
 
     if not vc:
         vc = await voice.channel.connect()
-        connections.update({ctx.guild.id: vc})
+    
+    connections.update({ctx.guild.id: vc})
 
     #await play(ctx, "speech.mp3")
 
