@@ -63,15 +63,15 @@ def text_to_speech(text:str)->str:
 
     return output_file
 
-#import whisper
+import whisper
 
-#model = whisper.load_model("base")
+model = whisper.load_model("base")
 
 #Use Whisper to convert recorded audio files to text
 def convert_audio_to_text(filename:str)->str:
     result = model.transcribe(filename)
-    #print(result["text"])
-    return result[text]
+    print(f"Whisper result: {result['text']}")
+    return result['text']
 
 #Retain a dictionary of messages for all users
 messages = {}
@@ -132,7 +132,7 @@ async def finished_callback(sink, channel: discord.TextChannel, context, *args):
             f.write(audio.file.getbuffer())
 
         #Convert to text using whisper
-        converted_text = "Trickybot, what's the capital of Idaho?"#convert_audio_to_text(f"{user_id}.{sink.encoding}")
+        converted_text = convert_audio_to_text(f"{user_id}.{sink.encoding}") # "Trickybot, what's the capital of Idaho?"#
 
         #Get the user from the provided ID        
         user = bot.get_user(user_id)
