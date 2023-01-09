@@ -120,7 +120,7 @@ async def send_to_model(user):
     except Exception as e:
         logger.exception(e)
 
-async def finished_callback(sink, channel: discord.TextChannel, *args):
+async def finished_callback(sink, channel: discord.TextChannel, context, *args):
     recorded_users = [f"<@{user_id}>" for user_id, audio in sink.audio_data.items()]
     #await sink.vc.disconnect()
 
@@ -147,7 +147,11 @@ async def finished_callback(sink, channel: discord.TextChannel, *args):
         print(f"AI response was {ai_response}")
 
         #Convert the AI response to an audio file
-        text_to_speech(ai_response)
+        text_to_speech(ai_response[0])
+
+        #Play the response in the current voice channel
+        await play(context, "speech.mp3")
+
 
     files = [
         discord.File(audio.file, f"{user_id}.{sink.encoding}")
@@ -195,16 +199,21 @@ async def record(ctx):
     if not voice:
         return await ctx.send("You're not in a vc right now")
 
-    vc = await voice.channel.connect()
-    connections.update({ctx.guild.id: vc})
+    vc = discord.utils.get(bot.voice_clients, guild=ctx.guild)
 
-    await play(ctx, "speech.mp3")
+
+    if not vc:
+        vc = await voice.channel.connect()
+        connections.update({ctx.guild.id: vc})
+
+    #await play(ctx, "speech.mp3")
 
     print("Starting record command")
     vc.start_recording(
         discord.sinks.WaveSink(),
         finished_callback,
         ctx.channel,
+        ctx
     )
 
     #await asyncio.sleep(5)
