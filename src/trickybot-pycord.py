@@ -74,7 +74,7 @@ def convert_audio_to_text(filename:str)->str:
     return result['text']
 
 #Retain a dictionary of messages for all users
-messages = {}
+messages = []
 connections = {}
 
 intents = discord.Intents.all()
@@ -86,6 +86,61 @@ bot = commands.Bot(
     description="I'm a bot",
     intents=intents,
 )
+
+import replicate
+
+model = replicate.models.get("stability-ai/stable-diffusion")
+version = model.versions.get("f178fa7a1ae43a9a9af01b833b9d2ecf97b1bcb0acfd2dc5dd04895e042863f1")
+
+@bot.slash_command()
+async def generate(ctx, prompt: str = None):
+
+    #await ctx.send(f"Generating image for prompt: {prompt}")
+    await ctx.defer()
+
+    # https://replicate.com/stability-ai/stable-diffusion/versions/f178fa7a1ae43a9a9af01b833b9d2ecf97b1bcb0acfd2dc5dd04895e042863f1#input
+    inputs = {
+        # Input prompt
+        'prompt': f"{prompt}",
+
+        # Specify things to not see in the output
+        # 'negative_prompt': ...,
+
+        # Width of output image. Maximum size is 1024x768 or 768x1024 because
+        # of memory limits
+        'width': 768,
+
+        # Height of output image. Maximum size is 1024x768 or 768x1024 because
+        # of memory limits
+        'height': 768,
+
+        # Prompt strength when using init image. 1.0 corresponds to full
+        # destruction of information in init image
+        'prompt_strength': 0.8,
+
+        # Number of images to output.
+        # Range: 1 to 4
+        'num_outputs': 1,
+
+        # Number of denoising steps
+        # Range: 1 to 500
+        'num_inference_steps': 50,
+
+        # Scale for classifier-free guidance
+        # Range: 1 to 20
+        'guidance_scale': 7.5,
+
+        # Choose a scheduler.
+        'scheduler': "DPMSolverMultistep",
+
+        # Random seed. Leave blank to randomize the seed
+        # 'seed': ...,
+    }
+
+    # https://replicate.com/stability-ai/stable-diffusion/versions/f178fa7a1ae43a9a9af01b833b9d2ecf97b1bcb0acfd2dc5dd04895e042863f1#output-schema
+    output = version.predict(**inputs)
+    print(output)
+    await ctx.respond(f"Successfully generated image for prompt: {prompt} {output[0]}")
 
 class Sinks(Enum):
     mp3 = discord.sinks.MP3Sink()
@@ -100,16 +155,27 @@ class Sinks(Enum):
 
 def add_to_messages(user, text:str):
     #If the user isn't in the dictionary, initialize a list of messages for them
-    if not user.id in messages:
-        messages[user] = []
-    messages[user].insert(0, Message(user = user.name, text=text))
+    #if not user.id in messages:
+    #    messages[user] = []
+
+    #Handle a special case of adding messages for the bot
+    if user=="trickybot":    
+        messages.append(Message(user = "trickybot", text=text))
+        return
+
+    #Otherwise get the discord user's name
+    messages.append(Message(user = user.name, text=text))
+
 
 async def send_to_model(user):    
     try:
         # generate the response
+
+        print(f"Messages were: {messages}")
+
         #async with thread.typing():
         response_data = await generate_completion_response(
-        messages=messages[user], user=user
+        messages=messages, user=user
         )    
 
         # send response
@@ -138,6 +204,8 @@ async def finished_callback(sink, channel: discord.TextChannel, context, *args):
         user = bot.get_user(user_id)
         print(f"User was {user.name} and text was {converted_text}")
 
+        await context.send(f"Interpreted speech: {converted_text}")
+
         #Add the user prompt to the conversation history
         add_to_messages(user, converted_text)
 
@@ -145,6 +213,10 @@ async def finished_callback(sink, channel: discord.TextChannel, context, *args):
         ai_response = await send_to_model(user)
 
         print(f"AI response was {ai_response}")
+        await context.send(f"AI Response: {ai_response[0]}")
+
+        #Add the response text from the ai
+        add_to_messages("trickybot", ai_response[0])
 
         #Convert the AI response to an audio file
         text_to_speech(ai_response[0])
@@ -153,13 +225,13 @@ async def finished_callback(sink, channel: discord.TextChannel, context, *args):
         await play(context, "speech.mp3")
 
 
-    files = [
-        discord.File(audio.file, f"{user_id}.{sink.encoding}")
-        for user_id, audio in sink.audio_data.items()
-    ]
-    await channel.send(
-        f"Finished! Recorded audio for {', '.join(recorded_users)}.", files=files
-    )
+    #files = [
+    #    discord.File(audio.file, f"{user_id}.{sink.encoding}")
+    #    for user_id, audio in sink.audio_data.items()
+    #]
+    #await channel.send(
+    #    f"Finished! Recorded audio for {', '.join(recorded_users)}.", files=files
+    #)
 
 
 #@bot.slash_command()
@@ -176,7 +248,7 @@ async def play(ctx: commands.Context, query: str):
         source, after=lambda e: print(f"Player error: {e}") if e else None
     )
 
-    await ctx.send(f"Now playing: {query}")
+    #await ctx.send(f"Now playing: {query}")
 
 @bot.command()
 async def add(ctx: commands.Context, left: int, right: int):
@@ -188,12 +260,12 @@ async def hello(ctx, name: str = None):
     name = name or ctx.author.name
     await ctx.send(f"Hello {name} {ctx.author.id}!")
 
-async def timer(ctx):
-    await asyncio.sleep(4)
+async def timer(ctx, seconds_to_listen):
+    await asyncio.sleep(seconds_to_listen)
     await stop(ctx)
 
 @bot.command()
-async def record(ctx):
+async def ask(ctx, seconds_to_listen=4):
     voice = ctx.author.voice
 
     if not voice:
@@ -220,14 +292,14 @@ async def record(ctx):
     #await asyncio.sleep(5)
     #await stop(ctx)
     
-    task = asyncio.create_task(timer(ctx))
+    task = asyncio.create_task(timer(ctx,seconds_to_listen))
 
-    await ctx.send("The recording has started!")
+    #await ctx.send("The recording has started!")
     await task
 
-@bot.slash_command()
+@bot.command(description="Ask the bot a question.")
 async def vc(ctx):
-    record(ctx)
+    ask(ctx)
 
 @bot.command()
 async def stop(ctx: discord.ApplicationContext):
