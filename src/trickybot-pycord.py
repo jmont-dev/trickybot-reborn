@@ -96,6 +96,9 @@ version = model.versions.get("f178fa7a1ae43a9a9af01b833b9d2ecf97b1bcb0acfd2dc5dd
 async def generate(ctx, prompt: str = None):
 
     #await ctx.send(f"Generating image for prompt: {prompt}")
+
+    await ctx.send(f'Generating prompt: {prompt}')
+
     await ctx.defer()
 
     # https://replicate.com/stability-ai/stable-diffusion/versions/f178fa7a1ae43a9a9af01b833b9d2ecf97b1bcb0acfd2dc5dd04895e042863f1#input
@@ -138,9 +141,15 @@ async def generate(ctx, prompt: str = None):
     }
 
     # https://replicate.com/stability-ai/stable-diffusion/versions/f178fa7a1ae43a9a9af01b833b9d2ecf97b1bcb0acfd2dc5dd04895e042863f1#output-schema
-    output = version.predict(**inputs)
-    print(output)
-    await ctx.respond(f"Successfully generated image for prompt: {prompt} {output[0]}")
+
+    try:
+        output = version.predict(**inputs)
+        print(output)
+        await ctx.followup.send(f"Successfully generated image for prompt: {prompt} {output[0]}")        
+    except discord.errors.ApplicationCommandInvokeError as e:
+        await ctx.followup.send(f"Error: {e}")
+    except: await ctx.followup.send(f"Image generation returned an error or violated content filter.")
+
 
 class Sinks(Enum):
     mp3 = discord.sinks.MP3Sink()
